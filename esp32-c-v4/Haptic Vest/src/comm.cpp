@@ -1,15 +1,19 @@
 #include <Arduino.h>
 #include "AsyncUDP.h"
 #include <ArduinoJson.h>
-#include <NTPClient.h>
+#include <string>
 #include <WiFi.h>
+#include <motor.h>
+#include <stdlib.h>
+#include <comm.h>
 
 AsyncUDP udp;
 
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP);
-
 int Message_Type_Register = 1;
+boolean registered = false;
+
+//interfaces
+OnMessageReceived onMessageReceivedCb;
 
 void sendMessage(char const *message)
 {
@@ -18,7 +22,9 @@ void sendMessage(char const *message)
     udp.print(message);
 }
 
-void registerDevice () {
+// TODO send available motors
+void registerDevice()
+{
     std::string str = std::to_string(ESP.getEfuseMac());
     const char *mac = str.c_str();
     const char *type = "haptic-vest-v1";
@@ -37,56 +43,74 @@ void registerDevice () {
     sendMessage(jsonChar);
 }
 
-void debugOut(AsyncUDPPacket packet) {
-            Serial.print("UDP Packet Type: ");
-            Serial.print(packet.isBroadcast()?"Broadcast":packet.isMulticast()?"Multicast":"Unicast");
-            Serial.print(", From: ");
-            Serial.print(packet.remoteIP());
-            Serial.print(":");
-            Serial.print(packet.remotePort());
-            Serial.print(", To: ");
-            Serial.print(packet.localIP());
-            Serial.print(":");
-            Serial.print(packet.localPort());
-            Serial.print(", Length: ");
-            Serial.print(packet.length());
-            Serial.print(", Data: ");
-            Serial.write(packet.data(), packet.length());
-            Serial.println();
+void debugOut(AsyncUDPPacket packet)
+{
+    Serial.print("UDP Packet Type: ");
+    Serial.print(packet.isBroadcast() ? "Broadcast" : packet.isMulticast() ? "Multicast"
+                                                                           : "Unicast");
+    Serial.print(", From: ");
+    Serial.print(packet.remoteIP());
+    Serial.print(":");
+    Serial.print(packet.remotePort());
+    Serial.print(", To: ");
+    Serial.print(packet.localIP());
+    Serial.print(":");
+    Serial.print(packet.localPort());
+    Serial.print(", Length: ");
+    Serial.print(packet.length());
+    Serial.print(", Data: ");
+    Serial.write(packet.data(), packet.length());
+    Serial.println();
 }
 
-void setupComms(IPAddress gateWayIp)
+bool prefix(const char *pre, const char *str)
+{
+    return strncmp(pre, str, strlen(pre)) == 0;
+}
+
+void handleMessage(AsyncUDPPacket packet)
+{
+    String message = String(packet.data(), packet.length());
+
+    if (message == "registered")
+    {
+        Serial.println("device registered");
+        registered = true;
+    }
+
+    onMessageReceivedCb(message);
+}
+
+void setupComms(IPAddress gateWayIp, OnMessageReceived cb)
 {
     Serial.print("UDP connecting on IP:");
     Serial.println(gateWayIp);
 
-    if(udp.connect(gateWayIp, 1234)) {
+    onMessageReceivedCb = cb;
+
+    if (udp.connect(gateWayIp, 1234))
+    {
         Serial.println("UDP connected");
-        udp.onPacket([](AsyncUDPPacket packet) {
+        udp.onPacket([](AsyncUDPPacket packet)
+                     {
             debugOut(packet);
             //reply to the client
             //packet.printf("Got %u bytes of data", packet.length());
-        });
-        registerDevice();
+            handleMessage(packet); });
+
+        int tryCount = 1;
+        while (!registered)
+        {
+            Serial.print("registering device ");
+            Serial.println(tryCount);
+            registerDevice();
+            delay(5000);
+            tryCount++;
+        }
     }
-    
-    timeClient.begin();  
-    
-    // Set offset time in seconds to adjust for your timezone, for example:
-    // GMT +1 = 3600
-    // GMT +8 = 28800
-    // GMT -1 = -3600
-    // GMT 0 = 0
-    timeClient.setTimeOffset(3600);
 }
 
-void sendHeartBeat() {
-  while(!timeClient.update()) {
-    timeClient.forceUpdate();
-  }
-  Serial.println(timeClient.getFormattedTime());
-
-  sendMessage((const char*)timeClient.getEpochTime());
-
-  delay(1000);
+void sendHeartBeat()
+{
+    // delay(1000);
 }
