@@ -4,7 +4,10 @@ import { setInterval } from "timers"
 
 import { Vest } from './Vest'
 
+const serverPort = 1234;
+
 const Message_Type_Register = 1
+const Message_Type_Drive = 2
 
 // --------------------creating a udp server --------------------
 
@@ -37,6 +40,15 @@ server.on('listening', () => {
     console.log('Server is listening at port : ' + port)
     console.log('Server ip : ' + ipaddr)
     console.log('Server is IP4/IP6 : ' + family)
+
+    //announce to devices, in case server restarted
+    //TODO: doesn't work -.-
+    server.setBroadcast(true);
+    server.send("announce", serverPort, "0.0.0.0", (err) => {
+        if (err) {
+            console.error(err)
+        }
+      });
 })
 
 //emits after the socket is closed using socket.close()
@@ -44,7 +56,8 @@ server.on('close', () => {
     console.log('Socket is closed !')
 })
 
-server.bind(1234)
+
+server.bind(serverPort)
 
 const debugMessage = (msg, info) => {
     console.log('Data received from client : ' + msg.toString())
@@ -56,8 +69,7 @@ const parseMessage = (msg, info) => {
         let message = JSON.parse(msg)
         if (message.mtype === Message_Type_Register) {
             vest = new Vest(message.mac, info.address, info.port)
-            //TODO: send num motors and set
-            vest.setMotors(Array(2).fill(0))
+            vest.setMotors(Array(message.motors).fill(0))
             sendMessage("registered", info.port, info.address)
             startSendLoop()
             //startTestLoop()
@@ -72,7 +84,7 @@ const sendMessage = (msg, port, address) =>  {
         if (error) {
             console.error(error)
         } else {
-            //console.log('message sent successfully')
+            console.log("send " + msg + " to " + address + ":" + port )
         }
 
     })
@@ -116,25 +128,34 @@ osc.on('*', (message, info) => {
                 maxValue = normalized
             }
             if (normalized == 0) { // no infitity plz, thx
-                vest.motors[0] = 0;
+                vest.motors[0] = 0
             } else {
-                vest.motors[0] = Math.round(normalized / maxValue * 4095)
+                let value = Math.round(normalized / maxValue * 4095)
+                vest.motors[0] = value > vest.powerMin ? value : vest.powerMin
             }
+
+            //send drive commands as soon as a message comes in
+            //sendMessage(Message_Type_Drive + "|" + vest.motors, vest.port, vest.ip);
+            newMessage = true;
         }
     }
 })
 
+let newMessage = false; //only send a message if a value potentially changed
+//send drive commands in a loop at a defined frequenzy
 const startSendLoop = () => {
     if (sendLoop !=  undefined) {
-        clearInterval(sendLoop);
+        clearInterval(sendLoop)
     }
     sendLoop = setInterval(() => {
         //TODO: dismiss previous message if equal
-        if (vest != undefined) {
-            console.log("motors: " + vest.motors)
-            sendMessage("drive|" + vest.motors, vest.port, vest.ip);
+        if (vest != undefined && newMessage) {
+        //if (vest != undefined) {
+            //console.log("motors: " + vest.motors)
+            sendMessage(Message_Type_Drive + "|" + vest.motors, vest.port, vest.ip)
+            newMessage = false
         }
-    }, 20) //50 fps send
+    }, 20) //50 messages per second max
 }
 
 
@@ -153,7 +174,7 @@ const startTestLoop = () => {
         if (vest != undefined) {
             vest.motors[0] = currentPower
             console.log("motors: " + vest.motors)
-            sendMessage("drive|" + vest.motors, vest.port, vest.ip)
+            sendMessage(Message_Type_Drive + "|" + vest.motors, vest.port, vest.ip)
         }
         if (up && currentPower < vest.powerMax) {
             currentPower++
@@ -175,7 +196,7 @@ const startTestLoop = () => {
 let times = 0;
 
 const calcInputFreq = () => {
-    times++;
+    times++
 }
 
 setInterval(() => {

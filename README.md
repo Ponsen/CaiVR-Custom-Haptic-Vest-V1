@@ -5,11 +5,10 @@ Not even alpha - but some stuff works so far
 
 ## Added POC for an ESP-32 Dev Kit C V4 (https://www.az-delivery.de/products/esp-32-dev-kit-c-v4).
 ### Features
-- UPD trafic
+- UPD traffic
 - registration process to host
 
 ### TODO
-- actual motor mapping/control
 - wifi config via phone
 
 ## Added POC for node server to controll devices
@@ -21,6 +20,7 @@ Not even alpha - but some stuff works so far
 ## TODO
 - actual motor mapping/control
 - UI for testing and mapping
+- announcement to devices if server was restarted and devices were already registered
 - other devices like gloves and trackers (SlimeVR?)
 
 # Notes

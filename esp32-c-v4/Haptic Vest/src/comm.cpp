@@ -10,10 +10,15 @@
 AsyncUDP udp;
 
 int Message_Type_Register = 1;
+String Message_Type_Drive = "2";
+
+String Message_Register = "registered";
+String Message_Annouce = "announce";
+
 boolean registered = false;
 
-//interfaces
-OnMessageReceived onMessageReceivedCb;
+// interfaces
+OnDriveCommand onDriveCommand;
 
 void sendMessage(char const *message)
 {
@@ -23,24 +28,34 @@ void sendMessage(char const *message)
 }
 
 // TODO send available motors
-void registerDevice()
+void registerDevice(uint8_t numMotors)
 {
     std::string str = std::to_string(ESP.getEfuseMac());
     const char *mac = str.c_str();
     const char *type = "haptic-vest-v1";
 
-    DynamicJsonDocument result(256);
+    DynamicJsonDocument result(128);
 
     result["mtype"] = Message_Type_Register;
     result["mac"] = mac;
     result["type"] = type;
-    JsonArray data = result.createNestedArray("data");
-    data.add(48.756080);
-    data.add(2.302038);
+    result["motors"] = numMotors;
+    // JsonArray data = result.createNestedArray("data");
+    // data.add(48.756080);
+    // data.add(2.302038);
 
-    char jsonChar[256];
+    char jsonChar[128];
     serializeJson(result, jsonChar, sizeof jsonChar);
-    sendMessage(jsonChar);
+
+    int tryCount = 1;
+    while (!registered)
+    {
+        Serial.print("registering device ");
+        Serial.println(tryCount);
+        sendMessage(jsonChar);
+        delay(5000);
+        tryCount++;
+    }
 }
 
 void debugOut(AsyncUDPPacket packet)
@@ -63,54 +78,45 @@ void debugOut(AsyncUDPPacket packet)
     Serial.println();
 }
 
-bool prefix(const char *pre, const char *str)
-{
-    return strncmp(pre, str, strlen(pre)) == 0;
-}
-
+String sValues;
 void handleMessage(AsyncUDPPacket packet)
 {
     String message = String(packet.data(), packet.length());
-
-    if (message == "registered")
+    if (message.equals("registered"))
     {
         Serial.println("device registered");
         registered = true;
     }
-
-    onMessageReceivedCb(message);
+    else if (message.equals("announce"))
+    {
+        Serial.println("requesting registration");
+        registerDevice(NUMMOTORS);
+    }
+    else if (message.startsWith(Message_Type_Drive))
+    {
+        sValues = message.substring(message.indexOf("|") + 1);
+        onDriveCommand(sValues);
+    }
 }
 
-void setupComms(IPAddress gateWayIp, OnMessageReceived cb)
+void setupComms(IPAddress gateWayIp, OnDriveCommand cb)
 {
     Serial.print("UDP connecting on IP:");
     Serial.println(gateWayIp);
 
-    onMessageReceivedCb = cb;
+    onDriveCommand = cb;
 
     if (udp.connect(gateWayIp, 1234))
     {
         Serial.println("UDP connected");
         udp.onPacket([](AsyncUDPPacket packet)
                      {
-            debugOut(packet);
+            //debugOut(packet);
             //reply to the client
             //packet.printf("Got %u bytes of data", packet.length());
-            handleMessage(packet); });
+            handleMessage(packet); }
+        );
 
-        int tryCount = 1;
-        while (!registered)
-        {
-            Serial.print("registering device ");
-            Serial.println(tryCount);
-            registerDevice();
-            delay(5000);
-            tryCount++;
-        }
+        registerDevice(NUMMOTORS);
     }
-}
-
-void sendHeartBeat()
-{
-    // delay(1000);
 }

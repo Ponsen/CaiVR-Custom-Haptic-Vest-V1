@@ -18,7 +18,8 @@ uint8_t temprature_sens_read();
 
 /* TEMPS */
 // doesn't work if wifi is off and then it's values are not reliable
-void logTemps() {
+void logTemps()
+{
   Serial.print((temprature_sens_read() - 32) / 1.8);
   Serial.println(" C");
 }
@@ -27,40 +28,34 @@ void logTemps() {
 
 void getValues(int values[], String str)
 {
-    int r = 0, t = 0;
+  int r = 0, t = 0;
 
-    for (int i = 0; i < str.length(); i++)
+  for (int i = 0; i < str.length(); i++)
+  {
+    if (str.charAt(i) == ',')
     {
-        if (str.charAt(i) == ',')
-        {
-            values[t] = str.substring(r, i).toInt();
-            r = (i + 1);
-            t++;
-        }
+      values[t] = str.substring(r, i).toInt();
+      r = (i + 1);
+      t++;
     }
+  }
 }
 
-int ints[32];
-String sValues;
-void OnHandleMessage(String message) {
-      if (message.startsWith("drive"))
-    {
-        //Serial.println("driving");
-        sValues = message.substring(message.indexOf("|") + 1);
-        //Serial.print("values: ");
-        //Serial.println(sValues);
-        getValues(ints, sValues);
-        driveMotors(ints, 2);
-    }
-}
-
-void WifiConnected(WiFiEventInfo_t event, WiFiClass Wifi)
+int ints[NUMMOTORS];
+void onDriveCommand(String values)
 {
-  IPAddress gateWayIp =  WiFi.gatewayIP();
-  setupComms(gateWayIp, OnHandleMessage);
+    // Serial.println("driving");
+    // Serial.print("values: ");
+    // Serial.println(sValues);
+    getValues(ints, values);
+    driveMotors(ints, NUMMOTORS);
 }
 
-
+void wifiConnected(WiFiEventInfo_t event, WiFiClass Wifi)
+{
+  IPAddress gateWayIp = WiFi.gatewayIP();
+  setupComms(gateWayIp, onDriveCommand);
+}
 
 /* MAIN */
 
@@ -68,15 +63,16 @@ void WifiConnected(WiFiEventInfo_t event, WiFiClass Wifi)
 void setup()
 {
   Serial.begin(115200);
-  initWifi(WifiConnected);
+  initWifi(wifiConnected);
   setupMotors();
-  //runScanner();
+  //motorTestSequence();
+  // runScanner();
 }
 
-//program loop
+// program loop
 void loop()
 {
   keepAlive();
   //motorTest();
-  //loopScanner();
+  // loopScanner();
 }

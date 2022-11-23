@@ -1,5 +1,4 @@
-typedef std::function<void(String message)> OnMessageReceived;
+typedef std::function<void(String message)> OnDriveCommand;
 
-void setupComms(IPAddress ipAdress, OnMessageReceived cb);
+void setupComms(IPAddress ipAdress, OnDriveCommand cb);
 void sendMessage(char const* message);
-void sendHeartBeat();

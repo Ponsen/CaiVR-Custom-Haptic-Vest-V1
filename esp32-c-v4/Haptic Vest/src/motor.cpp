@@ -1,6 +1,7 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <comm.h>
+#include <motor.h>
 
 // #define SDA_1 21
 // #define SCL_1 22
@@ -16,7 +17,7 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
 // want these to be as small/large as possible without hitting the hard stop
 // for max range. You'll have to tweak them as necessary to match the servos you
 // have!
-#define SERVOMIN 1300    // This is the 'minimum' pulse length count (out of 4096)
+#define SERVOMIN 1300 // This is the 'minimum' pulse length count (out of 4096)
 #define SERVOMAX 4096 // This is the 'maximum' pulse length count (out of 4096)
 #define USMIN 600     // This is the rounded 'minimum' microsecond length based on the minimum pulse of 150
 #define USMAX 2400    // This is the rounded 'maximum' microsecond length based on the maximum pulse of 600
@@ -24,6 +25,11 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
 
 // our servo # counter
 uint8_t servonum = 0;
+
+void resetMotors() {
+    int ints[NUMMOTORS];
+    driveMotors(ints, NUMMOTORS);
+}
 
 void setupMotors()
 {
@@ -48,6 +54,8 @@ void setupMotors()
     pwm.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
 
     delay(10);
+
+    resetMotors();
 }
 
 // You can use this function if you'd like to set the pulse length in seconds
@@ -93,37 +101,55 @@ void motorTest()
     }
 
     delay(2000);
-
-    Serial.println("microsec++");
-    // Drive each servo one at a time using writeMicroseconds(), it's not precise due to calculation rounding!
-    // The writeMicroseconds() function is used to mimic the Arduino Servo library writeMicroseconds() behavior.
-    for (uint16_t microsec = USMIN; microsec < USMAX; microsec++)
-    {
-        pwm.writeMicroseconds(servonum, microsec);
-    }
-
-    delay(500);
-    Serial.println("microsec++");
-    for (uint16_t microsec = USMAX; microsec > USMIN; microsec--)
-    {
-        pwm.writeMicroseconds(servonum, microsec);
-    }
-
-    delay(500);
-
     // servonum++;
     // if (servonum > 15)
     //     servonum = 0; // Testing the first 8 servo channels
 }
 
+void motorTestSequence()
+{
+    Serial.println("motor sequence test!");
+
+    for (int i = 0; i < NUMMOTORS; i++)
+    {
+
+        Serial.println("pulselen++");
+        for (uint16_t pulselen = SERVOMIN; pulselen < SERVOMAX; pulselen++)
+        {
+            Serial.print("driving ");
+            Serial.print(i);
+            Serial.print(" at ");
+            Serial.println(pulselen);
+            pwm.setPWM(i, 0, pulselen);
+        }
+
+        Serial.println("pulselen--");
+        for (uint16_t pulselen = SERVOMAX; pulselen > SERVOMIN; pulselen--)
+        {
+            Serial.print("driving ");
+            Serial.print(i);
+            Serial.print(" at ");
+            Serial.println(pulselen);
+            pwm.setPWM(i, 0, pulselen);
+        }
+        delay(100);
+    }
+
+    Serial.println("motor sequence test finished!");
+}
+
 void driveMotors(int values[], int size)
 {
+    Serial.print("driving ");
     for (int i = 0; i < size; i++)
     {
-        Serial.print("driving ");
-        Serial.print(i);
-        Serial.print(" at ");
-        Serial.println(values[i]);
+        Serial.print(values[i]);
+        Serial.print(",");
+    }
+    Serial.println("");
+
+    for (int i = 0; i < size; i++)
+    {
         pwm.setPWM(i, 0, values[i]);
     }
 }
